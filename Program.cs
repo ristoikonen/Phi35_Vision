@@ -8,6 +8,10 @@ using System.CommandLine;
 using System.CommandLine.Invocation;
 using static System.Net.Mime.MediaTypeNames;
 using System.IO;
+using Microsoft.ML.OnnxRuntime.Tensors;
+using System.Drawing;
+using Microsoft.ML.OnnxRuntime;
+using System.Text;
 
 
 namespace Phi3
@@ -22,8 +26,11 @@ namespace Phi3
 
         static async Task<int> Main(string[] args)
         {
+            //return await ProcessImages();
+
             if (args.Length < 1)
                 return await RunApp("", "chat");
+            
             if (args.Length == 1)
                 return await RunApp(args[0], "chat");
             else
@@ -32,34 +39,37 @@ namespace Phi3
             /*
              
             while (i < args.Length)
-{
-    var arg = args[i];
-    if (arg == "--non-interactive")
-    {
-        interactive = false;
-    }
-    else if (arg == "-m")
-    {
-        if (i + 1 < args.Length)
-        {
-            modelPath = Path.Combine(args[i+1]);
-        }
-    }
-    else if (arg == "-e")
-    {
-        if (i + 1 < args.Length)
-        {
-            executionProvider = Path.Combine(args[i+1]);
-        }
-    }
-    i++;
-}
+            {
+                var arg = args[i];
+                if (arg == "--non-interactive")
+                {
+                    interactive = false;
+                }
+                else if (arg == "-m")
+                {
+                    if (i + 1 < args.Length)
+                    {
+                        modelPath = Path.Combine(args[i+1]);
+                    }
+                }
+                else if (arg == "-e")
+                {
+                    if (i + 1 < args.Length)
+                    {
+                        executionProvider = Path.Combine(args[i+1]);
+                    }
+                }
+                i++;
+            }
               
               */
 
-
-
         }
+
+
+
+
+
 
         static async Task<int> RunApp(string path, string? usage)
         {
@@ -71,9 +81,9 @@ namespace Phi3
 
             var fileLocationsForImageApp = new FileLocations
             {
-                ModelDirectory = @"C:\tmp\models\Phi-3.5-vision-instruct", //Phi-3-vision-128k-instruct-onnx-cpu\cpu-int4-rtn-block-32-acc-level-4",
-                ModelName = "cpu-int4-rtn-block-32-acc-level-4",
-                Image1_Dir = @"C:\tmp\images\BayRoad.png",
+                ModelDirectory = @"C:\tmp\models\Phi-3-vision-128k-instruct-onnx-cpu\cpu-int4-rtn-block-32-acc-level-4",  //Phi-3.5-vision-instruct
+                ModelName = "Phi-3-vision-128k-instruct-onnx-cpu",
+                Image1_Dir = @"C:\tmp\images\cd.jpg",
                 Image2_Dir = @"C:\tmp\images\BeanStrip3.png",
                 ModelUsage = "Uses CPU. Does Optical Character Recognition (OCR), Image Captioning, Table Parsing, and Reading Comprehension on Scanned Documents. Limited by its size store too much factual knowledge. Balances latency vs. accuracy. Model with acc-level-4 has better performance with a minor trade-off in accuracy."
                 // https://techcommunity.microsoft.com/blog/azure-ai-services-blog/phi-3-vision-%E2%80%93-catalyzing-multimodal-innovation/4170251
@@ -149,8 +159,9 @@ namespace Phi3
 
                 var foggyDayImagePath = fileLocationsForImageApp.Image1_Dir; // Path.Combine(Directory.GetCurrentDirectory(), "imgs", "foggyday.png");
                 var petsMusicImagePath = fileLocationsForImageApp.Image2_Dir; // Path.Combine(Directory.GetCurrentDirectory(), "imgs", "petsmusic.png");
+                var onepath = new string[] { foggyDayImagePath };
                 var bothpaths = new string[] { foggyDayImagePath, petsMusicImagePath };
-                var img = Images.Load(bothpaths);
+                var img = Images.Load(foggyDayImagePath);
 
                 // define prompts
                 var systemPrompt = "You are an AI assistant that helps people find information. Answer questions using a direct style. Do not share more information that the requested by the users.";
@@ -162,8 +173,55 @@ namespace Phi3
                 using MultiModalProcessor processor = new MultiModalProcessor(model);
                 using var tokenizerStream = processor.CreateStream();
 
-                // create the input tensor with the prompt and image
-                Console.WriteLine("Full Prompt: " + fullPrompt);
+                var tokenizer = new Tokenizer(model);
+
+                //------
+
+
+            //    StringBuilder phiResponse = new StringBuilder();
+
+
+            //    var img1 = Images.Load(onepath);
+            //    string userPrompt1 = "Describe the image, and return the string 'STOP' at the end.";
+            //    var fullPrompt1 = $"<|system|>{systemPrompt}<|end|><|user|><|image_1|>{userPrompt1}<|end|><|assistant|>";
+
+            //    // create the input tensor with the prompt and image
+            //    //"visual_features": "visual_features"
+
+
+            //    var inputTensors1 = processor.ProcessImages(fullPrompt1, img1);
+            //    using GeneratorParams generatorParams1 = new GeneratorParams(model);
+            //    generatorParams1.SetSearchOption("max_length", 3072);
+            //    generatorParams1.SetInputs(inputTensors1);
+
+            //    var isProcessingTokenStarted = false;
+
+            //    // generate response        
+            //    using var generator1 = new Generator(model, generatorParams1);
+            //    while (!generator1.IsDone())
+            //    {
+            //        generator1.ComputeLogits();
+            //        generator1.GenerateNextToken();
+
+            //        if (!isProcessingTokenStarted)
+            //        {
+
+            //            isProcessingTokenStarted = true;
+            //        }
+
+            //        var seq = generator1.GetSequence(0)[^1];
+            //        var tokenString = tokenizerStream.Decode(seq);
+            //        phiResponse.Append(tokenString);
+            //    }
+
+
+            //Console.WriteLine(phiResponse.ToString());
+
+            //---
+
+
+            // create the input tensor with the prompt and image
+            Console.WriteLine("Full Prompt: " + fullPrompt);
                 Console.WriteLine("Start processing image and prompt ...");
                 var inputTensors = processor.ProcessImages(fullPrompt, img);
                 using GeneratorParams generatorParams = new GeneratorParams(model);
@@ -187,6 +245,8 @@ namespace Phi3
             }
             return 0;
         }
+
+
     }
 }
 
