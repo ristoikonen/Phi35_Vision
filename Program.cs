@@ -12,6 +12,8 @@ using Microsoft.ML.OnnxRuntime.Tensors;
 using System.Drawing;
 using Microsoft.ML.OnnxRuntime;
 using System.Text;
+using System.Diagnostics.CodeAnalysis;
+using System.IO.Pipes;
 
 
 namespace Phi3
@@ -28,6 +30,34 @@ namespace Phi3
         {
             //return await ProcessImages();
 
+            FileLocations fileLocationsForChatApp = FillLocation(MODELUSE.CHAT);
+            FileLocations fileLocationsForImageApp = FillLocation(MODELUSE.IMAGE);
+
+            // write title
+            SpectreConsoleOutput.DisplayTitle($"Use Phi 3.5 libraries via ONNX");
+
+            // user choice scenarios
+            var scenarios = SpectreConsoleOutput.SelectScenarios();
+            var scenario = scenarios[0];
+
+            switch (scenario)
+            {
+                case "cd.jpg":
+                case "BayRoad.png":
+                    var imagePath = Path.Combine(Directory.GetCurrentDirectory(), "imgs", scenario);
+                    //AnalizeImage(imagePath);
+                    break;
+                case "Type the image path to be analyzed":
+                    scenario = SpectreConsoleOutput.AskForString("Type the image path to be analyzed");
+                    //AnalizeImage(scenario);
+                    break;
+                case "Type a question":
+                    await RunChat(fileLocationsForChatApp);
+                    break;
+            }
+            SpectreConsoleOutput.DisplayTitleH3("Done !");
+            
+            /*
             if (args.Length < 1)
                 return await RunApp("", "chat");
             
@@ -35,7 +65,9 @@ namespace Phi3
                 return await RunApp(args[0], "chat");
             else
                 return await RunApp(args[0], args[1]);
+            */
 
+            return 0;
             /*
              
             while (i < args.Length)
@@ -67,8 +99,62 @@ namespace Phi3
         }
 
 
+        static async Task<int> RunChat(FileLocations fileLocationsForChatApp)
+        {
+            SpectreConsoleOutput.DisplayWait();
 
+            var modelPath = fileLocationsForChatApp.ModelDirectory; // @"C:\tmp\models\phi-3-directml-int4-awq-block-128";
+            var model = new Model(modelPath);
+            var tokenizer = new Tokenizer(model);
 
+            //SpectreConsoleOutput.DisplayTitleH3(fileLocationsForChatApp.ToString());
+
+            var systemPrompt = "You are an AI assistant that helps people find information. Answer questions using a direct style. Do not share more information that the requested by the users.";
+
+            // chat start
+            SpectreConsoleOutput.ClearDisplay()
+            
+            Console.WriteLine(@"Ask your question. Type an empty string to Exit.");
+
+            // chat loop
+            while (true)
+            {
+                // Get user question
+                Console.WriteLine();
+                Console.Write(@"Q: ");
+                var userQ = Console.ReadLine();
+                if (string.IsNullOrEmpty(userQ))
+                {
+                    break;
+                }
+
+                // show phi3 response
+                Console.Write("Phi3.5: ");
+                //var fullPrompt = $"<|system|>{systemPrompt}<|end|><|user|>{userQ}<|end|><|assistant|>";
+                var fullPrompt = $"<|system|>chemistry{systemPrompt}<|end|><|user|>{userQ}<|end|><|assistant|>";
+
+                var tokens = tokenizer.Encode(fullPrompt);
+
+                var generatorParams = new GeneratorParams(model);
+                generatorParams.SetSearchOption("max_length", 2048);
+                generatorParams.SetSearchOption("past_present_share_buffer", false);
+                generatorParams.SetInputSequences(tokens);
+
+                var generator = new Generator(model, generatorParams);
+                while (!generator.IsDone())
+                {
+                    generator.ComputeLogits();
+                    generator.GenerateNextToken();
+                    //        var e    = generator.SetActiveAdapter(GetOutput("e");
+                    var outputTokens = generator.GetSequence(0);
+                    var newToken = outputTokens.Slice(outputTokens.Length - 1, 1);
+                    var output = tokenizer.Decode(newToken);
+                    Console.Write(output);
+                }
+                Console.WriteLine();
+            }
+            return 0;
+        }
 
 
         static async Task<int> RunApp(string path, string? usage)
@@ -85,7 +171,7 @@ namespace Phi3
                 ModelName = "Phi-3-vision-128k-instruct-onnx-cpu",
                 Image1_Dir = @"C:\tmp\images\cd.jpg",
                 Image2_Dir = @"C:\tmp\images\BeanStrip3.png",
-                ModelUsage = "Uses CPU. Does Optical Character Recognition (OCR), Image Captioning, Table Parsing, and Reading Comprehension on Scanned Documents. Limited by its size store too much factual knowledge. Balances latency vs. accuracy. Model with acc-level-4 has better performance with a minor trade-off in accuracy."
+                ModelDesc = "Uses CPU. Does Optical Character Recognition (OCR), Image Captioning, Table Parsing, and Reading Comprehension on Scanned Documents. Limited by its size store too much factual knowledge. Balances latency vs. accuracy. Model with acc-level-4 has better performance with a minor trade-off in accuracy."
                 // https://techcommunity.microsoft.com/blog/azure-ai-services-blog/phi-3-vision-%E2%80%93-catalyzing-multimodal-innovation/4170251
             };
 
@@ -93,7 +179,7 @@ namespace Phi3
             {
                 ModelDirectory = @"C:\tmp\models\phi-3-directml-int4-awq-block-128",
                 ModelName = "phi-3-directml-int4-awq-block-128",
-                ModelUsage = "Uses CPU. Lightweight, focus on very high-quality, reasoning dense data, open model built upon datasets used for Phi-2 - synthetic data and filtered websites - with a focus on very high-quality, reasoning dense data. "
+                ModelDesc = "Uses CPU. Lightweight, focus on very high-quality, reasoning dense data, open model built upon datasets used for Phi-2 - synthetic data and filtered websites - with a focus on very high-quality, reasoning dense data. "
             };
 
             if (APP_MODELUSE == MODELUSE.CHAT)
@@ -153,6 +239,9 @@ namespace Phi3
 
             if (APP_MODELUSE == MODELUSE.IMAGE)
             {
+
+                ProcessImages();
+
                 // path for model and images
                 var modelPath = fileLocationsForImageApp.ModelDirectory;
                 //@"c:\tmp\models\Phi-3-vision-128k-instruct-onnx-cpu\cpu-int4-rtn-block-32-acc-level-4";
@@ -164,8 +253,10 @@ namespace Phi3
                 var img = Images.Load(foggyDayImagePath);
 
                 // define prompts
-                var systemPrompt = "You are an AI assistant that helps people find information. Answer questions using a direct style. Do not share more information that the requested by the users.";
+                var systemPrompt = "You are an AI assistant that helps people to understand images. Give your analysis in a direct style. Do not share more information that the requested by the users.";
                 string userPrompt = "Describe the image, and return the string 'STOP' at the end.";
+                
+                var question = "What is person doing in the image?";
                 var fullPrompt = $"<|system|>{systemPrompt}<|end|><|user|><|image_1|>{userPrompt}<|end|><|assistant|>";
 
                 // load model and create processor
@@ -244,6 +335,120 @@ namespace Phi3
 
             }
             return 0;
+        }
+
+
+        static private int ProcessImages()
+        {
+
+            //string modelPath = "path_to_your_model.onnx";
+            //string[] imagePaths = { "image1.jpg", "image2.jpg" }; // Add your image paths here
+            string textInput = "Find water";
+            var fileLocationsForImageApp = new FileLocations
+            {
+                ModelDirectory = @"C:\tmp\models\Phi-3.5-vision-instruct", //Phi-3-vision-128k-instruct-onnx-cpu\cpu-int4-rtn-block-32-acc-level-4",
+                ModelName = "Phi-3.5-vision-instruct",
+                Image1_Dir = @"C:\tmp\images\BayRoad.png",
+                Image2_Dir = @"C:\tmp\images\BeanStrip3.png",
+                ModelDesc = "Uses CPU. Does Optical Character Recognition (OCR), Image Captioning, Table Parsing, and Reading Comprehension on Scanned Documents. Limited by its size store too much factual knowledge. Balances latency vs. accuracy. Model with acc-level-4 has better performance with a minor trade-off in accuracy.",
+                ModelUsage= MODELUSE.IMAGE
+                // https://techcommunity.microsoft.com/blog/azure-ai-services-blog/phi-3-vision-%E2%80%93-catalyzing-multimodal-innovation/4170251
+            };
+
+            string[] imagePaths = { fileLocationsForImageApp.Image1_Dir, fileLocationsForImageApp.Image2_Dir };
+
+            using var session = new InferenceSession(fileLocationsForImageApp.ModelDirectory);
+
+            foreach (var imagePath in imagePaths)
+            {
+                var inputTensor = LoadImageAsTensor(imagePath);
+                var textTensor = LoadTextAsTensor(textInput);
+
+                var inputs = new List<NamedOnnxValue>
+                {
+                    NamedOnnxValue.CreateFromTensor("image_input", inputTensor),
+                    NamedOnnxValue.CreateFromTensor("text_input", textTensor)
+                };
+
+                using var results = session.Run(inputs);
+                var output = results.First().AsTensor<float>().ToArray();
+                Console.WriteLine($"Processed {imagePath}: {string.Join(", ", output)}");
+            }
+            return 0;
+        }
+
+        static DenseTensor<float> LoadImageAsTensor(string imagePath)
+        {
+            using var bitmap = new Bitmap(imagePath);
+            var tensor = new DenseTensor<float>(new[] { 1, 3, bitmap.Height, bitmap.Width });
+
+            for (int y = 0; y < bitmap.Height; y++)
+            {
+                for (int x = 0; x < bitmap.Width; x++)
+                {
+                    var color = bitmap.GetPixel(x, y);
+                    tensor[0, 0, y, x] = color.R / 255.0f;
+                    tensor[0, 1, y, x] = color.G / 255.0f;
+                    tensor[0, 2, y, x] = color.B / 255.0f;
+                }
+            }
+
+            return tensor;
+        }
+
+        static DenseTensor<float> LoadTextAsTensor(string text)
+        {
+            var words = text.Split(' ');
+            var tensor = new DenseTensor<float>(new[] { 1, words.Length });
+
+            for (int i = 0; i < words.Length; i++)
+            {
+                tensor[0, i] = ConvertWordToFloat(words[i]);
+            }
+
+            return tensor;
+        }
+
+
+
+        static float ConvertWordToFloat(string word)
+        {
+            // Simple example: convert each character to its ASCII value and sum them up
+            float sum = 0;
+            foreach (var ch in word)
+            {
+                sum += ch;
+            }
+            return sum;
+        }
+
+
+        static FileLocations FillLocation(Phi3.MODELUSE modeltype)
+        {
+            if (modeltype == MODELUSE.CHAT)
+            {
+                return new FileLocations
+                {
+                    ModelDirectory = @"C:\tmp\models\phi-3-directml-int4-awq-block-128",
+                    ModelName = "phi-3-directml-int4-awq-block-128",
+                    ModelDesc = "Uses CPU. Lightweight, focus on very high-quality, reasoning dense data, open model built upon datasets used for Phi-2 - synthetic data and filtered websites - with a focus on very high-quality, reasoning dense data. ",
+                    ModelUsage = MODELUSE.CHAT,
+
+                };
+            }
+            else //(modeltype == MODELUSE.CHAT)
+            {
+                return new FileLocations
+                {
+                    ModelDirectory = @"C:\tmp\models\Phi-3-vision-128k-instruct-onnx-cpu\cpu-int4-rtn-block-32-acc-level-4",  //Phi-3.5-vision-instruct
+                    ModelName = "Phi-3-vision-128k-instruct-onnx-cpu",
+                    Image1_Dir = @"C:\tmp\images\cd.jpg",
+                    Image2_Dir = @"C:\tmp\images\BeanStrip3.png",
+                    ModelDesc = "Uses CPU. Does Optical Character Recognition (OCR), Image Captioning, Table Parsing, and Reading Comprehension on Scanned Documents. Limited by its size store too much factual knowledge. Balances latency vs. accuracy.Acc-level-4 has better performance with a minor trade-off in accuracy.",
+                    ModelUsage = MODELUSE.IMAGE,
+
+                };
+            }
         }
 
 
