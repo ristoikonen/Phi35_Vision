@@ -43,9 +43,11 @@ namespace Phi3
             switch (scenario)
             {
                 case "cd.jpg":
+                    await RunImage(fileLocationsForImageApp, fileLocationsForImageApp.Image1_Dir);
+                    break;
                 case "BayRoad.png":
-                    var imagePath = Path.Combine(Directory.GetCurrentDirectory(), "imgs", scenario);
-                    //AnalizeImage(imagePath);
+                    //var imagePath = Path.Combine(Directory.GetCurrentDirectory(), "imgs", scenario);
+                    await RunImage(fileLocationsForImageApp, fileLocationsForImageApp.Image2_Dir);
                     break;
                 case "Type the image path to be analyzed":
                     scenario = SpectreConsoleOutput.AskForString("Type the image path to be analyzed");
@@ -57,47 +59,8 @@ namespace Phi3
             }
             SpectreConsoleOutput.DisplayTitleH3("Done !");
             
-            /*
-            if (args.Length < 1)
-                return await RunApp("", "chat");
-            
-            if (args.Length == 1)
-                return await RunApp(args[0], "chat");
-            else
-                return await RunApp(args[0], args[1]);
-            */
-
             return 0;
-            /*
-             
-            while (i < args.Length)
-            {
-                var arg = args[i];
-                if (arg == "--non-interactive")
-                {
-                    interactive = false;
-                }
-                else if (arg == "-m")
-                {
-                    if (i + 1 < args.Length)
-                    {
-                        modelPath = Path.Combine(args[i+1]);
-                    }
-                }
-                else if (arg == "-e")
-                {
-                    if (i + 1 < args.Length)
-                    {
-                        executionProvider = Path.Combine(args[i+1]);
-                    }
-                }
-                i++;
-            }
-              
-              */
-
         }
-
 
         static async Task<int> RunChat(FileLocations fileLocationsForChatApp)
         {
@@ -112,7 +75,7 @@ namespace Phi3
             var systemPrompt = "You are an AI assistant that helps people find information. Answer questions using a direct style. Do not share more information that the requested by the users.";
 
             // chat start
-            SpectreConsoleOutput.ClearDisplay()
+            SpectreConsoleOutput.ClearDisplay();
             
             Console.WriteLine(@"Ask your question. Type an empty string to Exit.");
 
@@ -153,6 +116,55 @@ namespace Phi3
                 }
                 Console.WriteLine();
             }
+            return 0;
+        }
+
+        static async Task<int> RunImage(FileLocations fileLocationsForImageApp, string pathToImage)
+        {
+            SpectreConsoleOutput.DisplayWait();
+            
+            var modelPath = fileLocationsForImageApp.ModelDirectory; // @"C:\tmp\models\phi-3-directml-int4-awq-block-128";
+            var img = Images.Load(pathToImage);
+
+            // chat start
+            SpectreConsoleOutput.ClearDisplay();
+
+            //SpectreConsoleOutput.DisplayTitleH3(fileLocationsForChatApp.ToString());
+
+            // define prompts
+            var systemPrompt = "You are an AI assistant that helps people to understand images. Give your analysis in a direct style. Do not share more information that the requested by the users.";
+            string userPrompt = "Describe the image, and return the string 'STOP' at the end.";
+            //var question = "What is in the image?";
+            var fullPrompt = $"<|system|>{systemPrompt}<|end|><|user|><|image_1|>{userPrompt}<|end|><|assistant|>";
+
+            // load model and create processor
+            using Model model = new Model(modelPath);
+            using MultiModalProcessor processor = new MultiModalProcessor(model);
+            using var tokenizerStream = processor.CreateStream();
+
+            var tokenizer = new Tokenizer(model);
+
+            // create the input tensor with the prompt and image
+            Console.WriteLine("Full Prompt: " + fullPrompt);
+            Console.WriteLine("Start processing image and prompt ...");
+            var inputTensors = processor.ProcessImages(fullPrompt, img);
+            using GeneratorParams generatorParams = new GeneratorParams(model);
+            generatorParams.SetSearchOption("max_length", 3072);
+            generatorParams.SetInputs(inputTensors);
+
+            // generate response
+            Console.WriteLine("Generating response ...");
+            using var generator = new Generator(model, generatorParams);
+            while (!generator.IsDone())
+            {
+                generator.ComputeLogits();
+                generator.GenerateNextToken();
+                var seq = generator.GetSequence(0)[^1];
+                Console.Write(tokenizerStream.Decode(seq));
+            }
+
+            Console.WriteLine("");
+            Console.WriteLine("Done!");
             return 0;
         }
 
@@ -240,7 +252,7 @@ namespace Phi3
             if (APP_MODELUSE == MODELUSE.IMAGE)
             {
 
-                ProcessImages();
+                
 
                 // path for model and images
                 var modelPath = fileLocationsForImageApp.ModelDirectory;
@@ -570,3 +582,5 @@ Console.WriteLine("Done!");
 
         return await rootCommand.InvokeAsync(args);
         */
+
+
