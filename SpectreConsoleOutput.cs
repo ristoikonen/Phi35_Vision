@@ -7,8 +7,34 @@ using Spectre.Console;
 
 namespace Phi3
 {
+    // Only Console methods here
+
     public static class SpectreConsoleOutput
     {
+        // Main menu
+        public static List<string> SelectScenarios()
+        {
+            // Ask for the user's favorite fruits
+            var scenarios = AnsiConsole.Prompt(
+                new MultiSelectionPrompt<string>()
+                    .Title("Select the [green]Phi 3.5 Vision scenarios[/] to run? Phi-3.5 Mini open model is made by Microsoft. It's 3.8 billion parameter model that's trained on synthetic data and filtered publicly available websites. It's instruction-tuned, meaning it's trained to follow different types of instructions. Due to it's size it is weak on Factual Knowledge and does not shine with languages. Then agin it's Reasoning and math is on par with GPT 3.5 Turbo models")
+                    .PageSize(10)
+                    .Required(true)
+                    .MoreChoicesText("[grey](Move up and down to reveal more scenarios)[/]")
+                    .InstructionsText(
+                        "[grey](Press [blue]<space>[/] to toggle a scenario, " +
+                        "[green]<enter>[/] to accept)[/]")
+                    .AddChoiceGroup("Select an image to be analuyzed", new[]
+                        {"BeanStrip3.png","cd.jpg","BayRoad.png",
+                        })
+                    .AddChoices(new[] {
+                    "Type the image path to be analyzed",
+                    "Type a question"
+                        })
+                    );
+            return scenarios;
+        }
+
         public static void DisplayTitle(string title = "Phi-3.5 Text and Vision")
         {
             AnsiConsole.Write(new FigletText(title).Centered().Color(Color.Purple));
@@ -87,29 +113,6 @@ namespace Phi3
         {
             var response = AnsiConsole.Ask<string>(@$"[green]{question}[/]");
             return response;
-        }
-
-        public static List<string> SelectScenarios()
-        {
-            // Ask for the user's favorite fruits
-            var scenarios = AnsiConsole.Prompt(
-                new MultiSelectionPrompt<string>()
-                    .Title("Select the [green]Phi 3.5 Vision scenarios[/] to run? Phi-3.5 Mini open model is made by Microsoft. It's 3.8 billion parameter model that's trained on synthetic data and filtered publicly available websites. It's instruction-tuned, meaning it's trained to follow different types of instructions. Due to it's size it is weak on Factual Knowledge and does not shine with languages. Then agin it's Reasoning and math is on par with GPT 3.5 Turbo models")
-                    .PageSize(10)
-                    .Required(true)
-                    .MoreChoicesText("[grey](Move up and down to reveal more scenarios)[/]")
-                    .InstructionsText(
-                        "[grey](Press [blue]<space>[/] to toggle a scenario, " +
-                        "[green]<enter>[/] to accept)[/]")
-                    .AddChoiceGroup("Select an image to be analuyzed", new[]
-                        {"BeanStrip3.png","cd.jpg","BayRoad.png",
-                        })
-                    .AddChoices(new[] {
-                    "Type the image path to be analyzed",
-                    "Type a question"
-                        })
-                    );
-            return scenarios;
         }
     }
 }

@@ -21,15 +21,18 @@ namespace Phi3
 
     class Phil3
     {
-
-        // CMD: phi3 "C:\tmp\models\phi-3-directml-int4-awq-block-128" chat
+        // USAGE: Phi3
+        // takes you to visual menu
+        // future CMD will have path and type params: phi3 "C:\tmp\models\phi-3-directml-int4-awq-block-128" chat
 
         public const string DEFAULT_MODEL_PATH = @"C:\tmp\models\phi-3-directml-int4-awq-block-128";
 
         static async Task<int> Main(string[] args)
         {
-            //return await ProcessImages();
+            //TODO: ProcessImages tests multi tensors, does not work as is - Perhaps separate app with ONNX library version 0.5 might work?
+            // return await ProcessImages();
 
+            // get model paths, descs and image filenames
             FileLocations fileLocationsForChatApp = FillLocation(MODELUSE.CHAT);
             FileLocations fileLocationsForImageApp = FillLocation(MODELUSE.IMAGE);
 
@@ -40,18 +43,17 @@ namespace Phi3
             var scenarios = SpectreConsoleOutput.SelectScenarios();
             var scenario = scenarios[0];
 
+            // present
             switch (scenario)
             {
                 case "cd.jpg":
                     await RunImage(fileLocationsForImageApp, fileLocationsForImageApp.Image1_Dir);
                     break;
                 case "BayRoad.png":
-                    //var imagePath = Path.Combine(Directory.GetCurrentDirectory(), "imgs", scenario);
                     await RunImage(fileLocationsForImageApp, fileLocationsForImageApp.Image2_Dir);
                     break;
                 case "Type the image path to be analyzed":
                     scenario = SpectreConsoleOutput.AskForString("Type the image path to be analyzed");
-                    //AnalizeImage(scenario);
                     break;
                 case "Type a question":
                     await RunChat(fileLocationsForChatApp);
@@ -62,6 +64,7 @@ namespace Phi3
             return 0;
         }
 
+        // Interactive AI chat in a while loop
         static async Task<int> RunChat(FileLocations fileLocationsForChatApp)
         {
             SpectreConsoleOutput.DisplayWait();
@@ -69,8 +72,6 @@ namespace Phi3
             var modelPath = fileLocationsForChatApp.ModelDirectory; // @"C:\tmp\models\phi-3-directml-int4-awq-block-128";
             var model = new Model(modelPath);
             var tokenizer = new Tokenizer(model);
-
-            //SpectreConsoleOutput.DisplayTitleH3(fileLocationsForChatApp.ToString());
 
             var systemPrompt = "You are an AI assistant that helps people find information. Answer questions using a direct style. Do not share more information that the requested by the users.";
 
@@ -91,7 +92,7 @@ namespace Phi3
                     break;
                 }
 
-                // show phi3 response
+                // show phi3.5 response
                 Console.Write("Phi3.5: ");
                 //var fullPrompt = $"<|system|>{systemPrompt}<|end|><|user|>{userQ}<|end|><|assistant|>";
                 var fullPrompt = $"<|system|>chemistry{systemPrompt}<|end|><|user|>{userQ}<|end|><|assistant|>";
@@ -119,6 +120,7 @@ namespace Phi3
             return 0;
         }
 
+        // AI image analysis - single image restriction but testing if one can store analysis in multiple tensors; a workaround
         static async Task<int> RunImage(FileLocations fileLocationsForImageApp, string pathToImage)
         {
             SpectreConsoleOutput.DisplayWait();
@@ -128,8 +130,6 @@ namespace Phi3
 
             // chat start
             SpectreConsoleOutput.ClearDisplay();
-
-            //SpectreConsoleOutput.DisplayTitleH3(fileLocationsForChatApp.ToString());
 
             // define prompts
             var systemPrompt = "You are an AI assistant that helps people to understand images. Give your analysis in a direct style. Do not share more information that the requested by the users.";
@@ -145,7 +145,7 @@ namespace Phi3
             var tokenizer = new Tokenizer(model);
 
             // create the input tensor with the prompt and image
-            Console.WriteLine("Full Prompt: " + fullPrompt);
+            //Console.WriteLine("Full Prompt: " + fullPrompt);
             Console.WriteLine("Start processing image and prompt ...");
             var inputTensors = processor.ProcessImages(fullPrompt, img);
             using GeneratorParams generatorParams = new GeneratorParams(model);
@@ -350,6 +350,32 @@ namespace Phi3
         }
 
 
+        static FileLocations FillLocation(Phi3.MODELUSE modeltype)
+        {
+            if (modeltype == MODELUSE.CHAT)
+            {
+                return new FileLocations
+                {
+                    ModelDirectory = @"C:\tmp\models\phi-3-directml-int4-awq-block-128",
+                    ModelName = "phi-3-directml-int4-awq-block-128",
+                    ModelDesc = "Uses CPU. Lightweight, focus on very high-quality, reasoning dense data, open model built upon datasets used for Phi-2 - synthetic data and filtered websites - with a focus on very high-quality, reasoning dense data. ",
+                    ModelUsage = MODELUSE.CHAT,
+                };
+            }
+            else
+            {
+                return new FileLocations
+                {
+                    ModelDirectory = @"C:\tmp\models\Phi-3-vision-128k-instruct-onnx-cpu\cpu-int4-rtn-block-32-acc-level-4",  //Phi-3.5-vision-instruct
+                    ModelName = "Phi-3-vision-128k-instruct-onnx-cpu",
+                    Image1_Dir = @"C:\tmp\images\cd.jpg",
+                    Image2_Dir = @"C:\tmp\images\BeanStrip3.png",
+                    ModelDesc = "Uses CPU. Does Optical Character Recognition (OCR), Image Captioning, Table Parsing, and Reading Comprehension on Scanned Documents. Limited by its size store too much factual knowledge. Balances latency vs. accuracy.Acc-level-4 has better performance with a minor trade-off in accuracy.",
+                    ModelUsage = MODELUSE.IMAGE,
+                };
+            }
+        }
+
         static private int ProcessImages()
         {
 
@@ -433,37 +459,6 @@ namespace Phi3
             }
             return sum;
         }
-
-
-        static FileLocations FillLocation(Phi3.MODELUSE modeltype)
-        {
-            if (modeltype == MODELUSE.CHAT)
-            {
-                return new FileLocations
-                {
-                    ModelDirectory = @"C:\tmp\models\phi-3-directml-int4-awq-block-128",
-                    ModelName = "phi-3-directml-int4-awq-block-128",
-                    ModelDesc = "Uses CPU. Lightweight, focus on very high-quality, reasoning dense data, open model built upon datasets used for Phi-2 - synthetic data and filtered websites - with a focus on very high-quality, reasoning dense data. ",
-                    ModelUsage = MODELUSE.CHAT,
-
-                };
-            }
-            else //(modeltype == MODELUSE.CHAT)
-            {
-                return new FileLocations
-                {
-                    ModelDirectory = @"C:\tmp\models\Phi-3-vision-128k-instruct-onnx-cpu\cpu-int4-rtn-block-32-acc-level-4",  //Phi-3.5-vision-instruct
-                    ModelName = "Phi-3-vision-128k-instruct-onnx-cpu",
-                    Image1_Dir = @"C:\tmp\images\cd.jpg",
-                    Image2_Dir = @"C:\tmp\images\BeanStrip3.png",
-                    ModelDesc = "Uses CPU. Does Optical Character Recognition (OCR), Image Captioning, Table Parsing, and Reading Comprehension on Scanned Documents. Limited by its size store too much factual knowledge. Balances latency vs. accuracy.Acc-level-4 has better performance with a minor trade-off in accuracy.",
-                    ModelUsage = MODELUSE.IMAGE,
-
-                };
-            }
-        }
-
-
     }
 }
 
@@ -513,6 +508,8 @@ while (!generator.IsDone())
 
 Console.WriteLine("");
 Console.WriteLine("Done!");
+
+//var imagePath = Path.Combine(Directory.GetCurrentDirectory(), "imgs", scenario);
  */
 
 

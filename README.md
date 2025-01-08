@@ -1,8 +1,18 @@
 # Phi3
 
-## AI App using Phi-3  models with OnnxRuntimeGenAI.
+## AI Chat and Image Analysis cmd-line application using Phi-3.5  models with ONNX.
+
+#### Command line use, type: Phi3
+Takes you to visual multi-choice menu:
+1. AI Chat with Phi-3.5
+2. AI image analysis using Phi-3.5
+
+Models use CPU. Models have to be in respective model name directory inside tmp directory. 
+Place images for analysis in image folder in tmp directory.
+Uses OnnxRuntimeGenAI library version 0.4.
 
 
+*Rest is about my AI learnings...*
 ## Plant trees:  Get a forest
 
 **Decision trees** can be adjusted to both regression and classification.

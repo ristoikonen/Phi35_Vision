@@ -9,15 +9,11 @@ using Microsoft.ML.OnnxRuntime.Tensors;
 
 namespace Phi3
 {
-
-
     public enum MODELUSE : ushort
     {
         CHAT,
         IMAGE
     }
-
-    
 
     public interface IFileLocations
     {
@@ -30,11 +26,8 @@ namespace Phi3
 
     }
 
-    public record FileLocations //: IFileLocations
+    public record FileLocations
     {
-        private readonly string rootdirectory;
-
-        // public required string ModelDirectory
         public FileLocations()
         {
 
@@ -50,10 +43,9 @@ namespace Phi3
         }
         public string ModelDirectory
         {
-            get; set;
-            //get => rootdirectory;
-            //init => rootdirectory = @"c:\tmp"
-            //set;
+            get; 
+            //init => ModelDirectory = @"c:\tmp";
+            set;
         }
 
         public string ModelName
@@ -77,10 +69,5 @@ namespace Phi3
             str += Environment.NewLine + "ModelUsage = " + (this.ModelDesc ?? "");
             return str;
         }
-    
-
     }
-
-
-
-    }
+}
