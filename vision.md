@@ -1,5 +1,42 @@
 ﻿# Vision Language Model
 
+
+
+```c#
+
+using var session = new InferenceSession(modelPath);
+
+foreach (var imagePath in imagePaths)
+{
+    var inputTensor = LoadImageAsTensor(imagePath);
+    var inputs = new List<NamedOnnxValue>
+    {
+        NamedOnnxValue.CreateFromTensor("input", inputTensor)
+    };
+
+    using var results = session.Run(inputs);
+    var output = results.First().AsTensor<float>().ToArray();
+    Console.WriteLine($"Processed {imagePath}: {string.Join(", ", output)}");
+}
+...
+
+// LoadImageAsTensor
+// Load percentages; how much of pure red does this pixel have, into RGB tensor
+
+
+        for (int y = 0; y < bitmap.Height; y++)
+        {
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                var color = bitmap.GetPixel(x, y);
+                tensor[0, 0, y, x] = color.R / 255.0f;
+                tensor[0, 1, y, x] = color.G / 255.0f;
+                tensor[0, 2, y, x] = color.B / 255.0f;
+            }
+        }
+
+```
+
 ### Source: https://huggingface.co/blog/vlms
 
 Vision language models are broadly defined as multimodal models that can learn from images and text. 

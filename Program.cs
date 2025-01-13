@@ -14,6 +14,7 @@ using Microsoft.ML.OnnxRuntime;
 using System.Text;
 using System.Diagnostics.CodeAnalysis;
 using System.IO.Pipes;
+using System.Numerics;
 
 
 namespace Phi3
@@ -31,9 +32,10 @@ namespace Phi3
         {
             //TODO: ProcessImages tests multi tensors, does not work as is - Perhaps separate app with ONNX library version 0.5 might work?
             // return await ProcessImages();
-
+            
+            
             // get model paths, descs and image filenames
-            FileLocations fileLocationsForChatApp = FillLocation(MODELUSE.CHAT);
+            //FileLocations fileLocationsForChatApp = FillLocation(MODELUSE.CHAT);
             FileLocations fileLocationsForImageApp = FillLocation(MODELUSE.IMAGE);
 
             // write title
@@ -56,7 +58,7 @@ namespace Phi3
                     scenario = SpectreConsoleOutput.AskForString("Type the image path to be analyzed");
                     break;
                 case "Type a question":
-                    await RunChat(fileLocationsForChatApp);
+                    await RunBuGeRed(fileLocationsForImageApp);
                     break;
             }
             SpectreConsoleOutput.DisplayTitleH3("Done !");
@@ -65,6 +67,18 @@ namespace Phi3
         }
 
         // Interactive AI chat in a while loop
+        static async Task<int> RunBuGeRed(FileLocations fileLocationsForImageApp)
+        {
+            SpectreConsoleOutput.DisplayWait();
+
+            BuGeRedCollection bgrcoll = new BuGeRedCollection();
+            Bitmap bmp = new(fileLocationsForImageApp.Image1_Dir);
+            var v3 = bgrcoll.GetBitmapAsVector3(bmp);
+
+            return 0;
+        }
+
+            // Interactive AI chat in a while loop
         static async Task<int> RunChat(FileLocations fileLocationsForChatApp)
         {
             SpectreConsoleOutput.DisplayWait();
