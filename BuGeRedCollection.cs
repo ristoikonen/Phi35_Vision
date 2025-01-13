@@ -10,6 +10,8 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Drawing.Interop;
 using System.Numerics;
+using System.Runtime.Intrinsics;
+using Microsoft.ML.OnnxRuntime.Tensors;
 
 namespace Phi3
 {
@@ -140,6 +142,41 @@ namespace Phi3
                 vl.Add(bgr.GetAsPercentageVector3());
             }
             return vl;
+        }
+
+
+        static DenseTensor<float> LoadImageAsTensor(string imagePath)
+        {
+            using var bitmap = new Bitmap(imagePath);
+
+
+            var tensor = new DenseTensor<float>(new[] { 1, 3, bitmap.Height, bitmap.Width });
+
+            for (int y = 0; y < bitmap.Height; y++)
+            {
+                for (int x = 0; x < bitmap.Width; x++)
+                {
+                    var color = bitmap.GetPixel(x, y);
+                    tensor[0, 0, y, x] = color.R / 255.0f;
+                    tensor[0, 1, y, x] = color.G / 255.0f;
+                    tensor[0, 2, y, x] = color.B / 255.0f;
+                }
+            }
+
+            return tensor;
+        }
+
+
+
+        public List<Vector4> Transform(List<Vector3> vector3sList, Matrix4x4 matrix)
+        {
+            List<Vector4> l4 = new List<Vector4>(vector3sList.Count);
+            foreach (var v3 in vector3sList)
+            {
+                l4.Add(Vector4.Transform(v3, matrix));
+            }
+            return l4;
+            
         }
 
     }

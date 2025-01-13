@@ -15,6 +15,7 @@ using System.Text;
 using System.Diagnostics.CodeAnalysis;
 using System.IO.Pipes;
 using System.Numerics;
+using System.Xml.Linq;
 
 
 namespace Phi3
@@ -35,7 +36,7 @@ namespace Phi3
             
             
             // get model paths, descs and image filenames
-            //FileLocations fileLocationsForChatApp = FillLocation(MODELUSE.CHAT);
+            FileLocations fileLocationsForChatApp = FillLocation(MODELUSE.CHAT);
             FileLocations fileLocationsForImageApp = FillLocation(MODELUSE.IMAGE);
 
             // write title
@@ -58,8 +59,12 @@ namespace Phi3
                     scenario = SpectreConsoleOutput.AskForString("Type the image path to be analyzed");
                     break;
                 case "Type a question":
-                    await RunBuGeRed(fileLocationsForImageApp);
+                    await RunChat(fileLocationsForChatApp);
                     break;
+                case "Create Vector3 from Bitmap":
+                    var n = ProcessImages();
+                    break;
+                    // fileLocationsForImageApp
             }
             SpectreConsoleOutput.DisplayTitleH3("Done !");
             
@@ -78,7 +83,7 @@ namespace Phi3
             return 0;
         }
 
-            // Interactive AI chat in a while loop
+        // Interactive AI chat in a while loop
         static async Task<int> RunChat(FileLocations fileLocationsForChatApp)
         {
             SpectreConsoleOutput.DisplayWait();
@@ -400,8 +405,8 @@ namespace Phi3
             string textInput = "Find water";
             var fileLocationsForImageApp = new FileLocations
             {
-                ModelDirectory = @"C:\tmp\models\Phi-3.5-vision-instruct", //Phi-3-vision-128k-instruct-onnx-cpu\cpu-int4-rtn-block-32-acc-level-4",
-                ModelName = "Phi-3.5-vision-instruct",
+                ModelDirectory = @"C:\tmp\models\Phi-3-vision-128k-instruct-onnx-cpu\cpu-int4-rtn-block-32-acc-level-4\phi-3-v-128k-instruct-vision.onnx", //Phi-3-vision-128k-instruct-onnx-cpu\cpu-int4-rtn-block-32-acc-level-4",
+                ModelName = "Phi-3-vision-128k-instruct-onnx-cpu",
                 Image1_Dir = @"C:\tmp\images\BayRoad.png",
                 Image2_Dir = @"C:\tmp\images\BeanStrip3.png",
                 ModelDesc = "Uses CPU. Does Optical Character Recognition (OCR), Image Captioning, Table Parsing, and Reading Comprehension on Scanned Documents. Limited by its size store too much factual knowledge. Balances latency vs. accuracy. Model with acc-level-4 has better performance with a minor trade-off in accuracy.",
@@ -416,13 +421,49 @@ namespace Phi3
             foreach (var imagePath in imagePaths)
             {
                 var inputTensor = LoadImageAsTensor(imagePath);
+                var image_sizesTensor = LoadImageSizesAsTensor(fileLocationsForImageApp.Image1_Dir, fileLocationsForImageApp.Image2_Dir);
                 var textTensor = LoadTextAsTensor(textInput);
+                
+                Console.WriteLine(session.InputNames[0]);
+
+                var imageSizes = new DenseTensor<long>(new[] { 2, 2 });
+                var sizes = GetImageSize(fileLocationsForImageApp.Image1_Dir, fileLocationsForImageApp.Image2_Dir);
+                imageSizes[0, 0] = sizes[0, 0];
+                imageSizes[0, 1] = sizes[0, 1];
+                imageSizes[1, 0] = sizes[1, 0];
+                imageSizes[1, 1] = sizes[1, 1];
 
                 var inputs = new List<NamedOnnxValue>
                 {
-                    NamedOnnxValue.CreateFromTensor("image_input", inputTensor),
-                    NamedOnnxValue.CreateFromTensor("text_input", textTensor)
+                    NamedOnnxValue.CreateFromTensor("pixel_values", inputTensor.ToDenseTensor())
+                    ,NamedOnnxValue.CreateFromTensor("image_sizes", textTensor.ToDenseTensor())  //imageSizes) //
+                     
                 };
+                //long[,] arr = { { 100, 200 }, { 200, 300 } };
+
+
+                var val = inputs[0].Value;
+                var inputNames = session.InputMetadata.Values;
+
+
+
+                //imageSizes[0] = new Tuple<long, long>(200, 200);
+                //imageSizes[1] = new Tuple<long, long>(300, 300);
+
+                //var imageSizes = OrtValue.CreateTensorValueFromMemory<long>(new long[] { 100, 200, 300, 400 }, new long[] { 2, 2 });
+                //var imageSizes = (new long[] { 100, 200, 300, 400 }, new long[] { 2, 2 });
+                //var imageSizes = new long[] { 100, 200, 300, 400 };
+
+
+                //var imageTensor = new DenseTensor<long>(new[] { 100, 200, 300, 400 });
+
+                //var tensor = new DenseTensor<float>(inputTensor);
+                var nov1 = NamedOnnxValue.CreateFromTensor<float>("pixel_values", inputTensor.ToDenseTensor());
+                var mno2 = NamedOnnxValue.CreateFromTensor<long>("image_sizes", imageSizes);
+                // Tuple<long, long>
+
+
+                var newins = new List<NamedOnnxValue> {nov1, mno2 };
 
                 using var results = session.Run(inputs);
                 var output = results.First().AsTensor<float>().ToArray();
@@ -431,9 +472,23 @@ namespace Phi3
             return 0;
         }
 
+        static void PrintInputs(IReadOnlyDictionary<string,NodeMetadata> inputMetadata) 
+        {
+
+            // Print the names of the input tensors
+            foreach (var inputName in inputMetadata.Values)
+            {
+                Console.WriteLine("Input name: " + inputName);
+            }
+        }
+
         static DenseTensor<float> LoadImageAsTensor(string imagePath)
         {
             using var bitmap = new Bitmap(imagePath);
+
+            //BuGeRedCollection bgrcoll = new BuGeRedCollection();
+            //var v3 = bgrcoll.GetBitmapAsVector3(bitmap);
+
             var tensor = new DenseTensor<float>(new[] { 1, 3, bitmap.Height, bitmap.Width });
 
             for (int y = 0; y < bitmap.Height; y++)
@@ -450,19 +505,98 @@ namespace Phi3
             return tensor;
         }
 
-        static DenseTensor<float> LoadTextAsTensor(string text)
+        static DenseTensor<float> LoadImageAsNormalTensor(string imagePath)
         {
-            var words = text.Split(' ');
-            var tensor = new DenseTensor<float>(new[] { 1, words.Length });
+            using var bitmap = new Bitmap(imagePath);
 
-            for (int i = 0; i < words.Length; i++)
+            var tensor = new DenseTensor<float>(new[] { 1, 3, bitmap.Height, bitmap.Width });
+
+            for (int y = 0; y < bitmap.Height; y++)
             {
-                tensor[0, i] = ConvertWordToFloat(words[i]);
+                for (int x = 0; x < bitmap.Width; x++)
+                {
+                    var color = bitmap.GetPixel(x, y);
+
+                    tensor[0, 0, y, x] = (float) color.R / 255.0f;
+                    tensor[0, 1, y, x] = (float) color.G / 255.0f;
+                    tensor[0, 2, y, x] = (float) color.B / 255.0f;
+                }
             }
 
             return tensor;
         }
 
+        //static DenseTensor<float> LoadVectorAsTensor(string imagePath)
+        //{
+        //    using var bitmap = new Bitmap(imagePath);
+        //    var v3 = 
+        //    var tensor = new DenseTensor<float>(new[] { 1, 3, bitmap.Height, bitmap.Width });
+
+        //    for (int y = 0; y < bitmap.Height; y++)
+        //    {
+        //        for (int x = 0; x < bitmap.Width; x++)
+        //        {
+        //            var color = bitmap.GetPixel(x, y);
+        //            tensor[0, 0, y, x] = color.R / 255.0f;
+        //            tensor[0, 1, y, x] = color.G / 255.0f;
+        //            tensor[0, 2, y, x] = color.B / 255.0f;
+        //        }
+        //    }
+
+        //    return tensor;
+        //}
+
+
+        static DenseTensor<Int64> LoadTextAsTensor(string text)
+        {
+            var words = text.Split(' ');
+            var tensor = new DenseTensor<Int64>(new[] { 1, words.Length });
+
+            for (int i = 0; i < words.Length; i++)
+            {
+                tensor[0, i] = ConvertWordToInt64(words[i]);
+            }
+
+            return tensor;
+        }
+
+        static DenseTensor<Tuple<long, long>> LoadImageSizesAsTensor(string imagePath1, string imagePath2)
+        {
+            using var bitmap1 = new Bitmap(imagePath1);
+            using var bitmap2 = new Bitmap(imagePath2);
+            //var tensor = new DenseTensor<Int64>(new[] { 1, 2 });
+            var tensor = new DenseTensor<Tuple<long, long>>(new[] { 1, 2 });
+
+            Tuple<long, long> b1 = new Tuple<long, long>( bitmap1.Height, bitmap1.Width);
+            Tuple<long, long> b2 = new Tuple<long, long>(bitmap2.Height, bitmap2.Width);
+            List<Tuple<long, long>> l = new List<Tuple<long, long>> { b1, b2 };
+
+            for (int i = 0; i < 2; i++)
+            {
+                tensor[0, i] = l[i];
+            }
+
+            return tensor;
+        }
+
+        static long[,] GetImageSize(string imagePath1, string imagePath2)
+        {
+            using var bitmap1 = new Bitmap(imagePath1);
+            using var bitmap2 = new Bitmap(imagePath2);
+
+            var imageSize = new long[,] { { 1, 1 }, { 1, 1 } };
+
+            imageSize[0, 0] = bitmap1.Height;
+            imageSize[0, 1] = bitmap1.Width;
+            imageSize[0, 0] = bitmap2.Height;
+            imageSize[0, 1] = bitmap2.Width;
+
+
+            return imageSize;
+        }
+
+
+        // var imageSizes = OrtValue.CreateTensorValueFromMemory<long>(new long[] { height, width }, new long[] { num_images, 2 });
 
 
         static float ConvertWordToFloat(string word)
@@ -475,6 +609,18 @@ namespace Phi3
             }
             return sum;
         }
+
+        static Int64 ConvertWordToInt64(string word)
+        {
+            // Simple example: convert each character to its ASCII value and sum them up
+            Int64 sum = 0;
+            foreach (var ch in word)
+            {
+                sum += ch;
+            }
+            return sum;
+        }
+
     }
 }
 

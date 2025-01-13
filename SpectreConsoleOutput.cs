@@ -24,12 +24,14 @@ namespace Phi3
                     .InstructionsText(
                         "[grey](Press [blue]<space>[/] to toggle a scenario, " +
                         "[green]<enter>[/] to accept)[/]")
-                    .AddChoiceGroup("Select an image to be analuyzed", new[]
+                    .AddChoiceGroup("Choose the image to be analyzed", new[]
                         {"BeanStrip3.png","cd.jpg","BayRoad.png",
                         })
                     .AddChoices(new[] {
                     "Type the image path to be analyzed",
-                    "Type a question"
+                    "Type a question",
+                    "Create Vector3 from Bitmap"
+                    
                         })
                     );
             return scenarios;
