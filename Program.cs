@@ -142,12 +142,14 @@ namespace Phi3
             using MultiModalProcessor processor = new MultiModalProcessor(model);
             using var tokenizerStream = processor.CreateStream();
 
-            var tokenizer = new Tokenizer(model);
 
+            var tokenizer = new Tokenizer(model);
+                        
             // create the input tensor with the prompt and image
             //Console.WriteLine("Full Prompt: " + fullPrompt);
             Console.WriteLine("Start processing image and prompt ...");
             var inputTensors = processor.ProcessImages(fullPrompt, img);
+
             using GeneratorParams generatorParams = new GeneratorParams(model);
             generatorParams.SetSearchOption("max_length", 3072);
             generatorParams.SetInputs(inputTensors);
