@@ -19,8 +19,10 @@ using System.Xml.Linq;
 using OnnxStack.Core;
 
 
+
 namespace Phi3
 {
+    //https://onnxruntime.ai/docs/tutorials/csharp/stable-diffusion-csharp.html#inference-with-c
 
     class Phil3
     {
@@ -72,7 +74,44 @@ namespace Phi3
             return 0;
         }
 
-        // Interactive AI chat in a while loop
+
+        static async Task<int> RunSpectra(FileLocations fileLocationsForChatApp)
+        {
+            //Default args
+            var prompt = "make a picture of green tree with flowers around it and a red sky";
+            // Number of steps
+            var num_inference_steps = 10;
+
+            // Scale for classifier-free guidance
+            var guidance_scale = 7.5;
+            //num of images requested
+            var batch_size = 1;
+            // Load the tokenizer and text encoder to tokenize and encode the text.
+            var textTokenized = TokenizeText(prompt);
+            var textPromptEmbeddings = TextEncoder(textTokenized).ToArray();
+            // Create uncond_input of blank tokens
+            var uncondInputTokens = CreateUncondInput();
+            var uncondEmbedding = TextEncoder(uncondInputTokens).ToArray();
+            // Concat textEmeddings and uncondEmbedding
+            DenseTensor<float> textEmbeddings = new DenseTensor<float>(new[] { 2, 77, 768 });
+            for (var i = 0; i < textPromptEmbeddings.Length; i++)
+            {
+                textEmbeddings[0, i / 768, i % 768] = uncondEmbedding[i];
+                textEmbeddings[1, i / 768, i % 768] = textPromptEmbeddings[i];
+            }
+            var height = 512;
+            var width = 512;
+            // Inference Stable Diff
+            var image = UNet.Inference(num_inference_steps, textEmbeddings, guidance_scale, batch_size, height, width);
+            // If image failed or was unsafe it will return null.
+            if (image == null)
+            {
+                Console.WriteLine("Unable to create image, please try again.");
+            }
+            return 0;
+        }
+
+            // Interactive AI chat in a while loop
         static async Task<int> RunBuGeRed(FileLocations fileLocationsForImageApp)
         {
             SpectreConsoleOutput.DisplayWait();
@@ -146,7 +185,7 @@ namespace Phi3
             SpectreConsoleOutput.DisplayWait();
             
             var modelPath = fileLocationsForImageApp.ModelDirectory; // @"C:\tmp\models\phi-3-directml-int4-awq-block-128";
-            var img = Images.Load(pathToImage);
+            var img = Images.Load(new string[] { pathToImage });
 
             // chat start
             SpectreConsoleOutput.ClearDisplay();
@@ -284,7 +323,7 @@ namespace Phi3
                 var petsMusicImagePath = fileLocationsForImageApp.Image2_Dir; // Path.Combine(Directory.GetCurrentDirectory(), "imgs", "petsmusic.png");
                 var onepath = new string[] { foggyDayImagePath };
                 var bothpaths = new string[] { foggyDayImagePath, petsMusicImagePath };
-                var img = Images.Load(foggyDayImagePath);
+                var img = Images.Load(new string[] { foggyDayImagePath });
 
                 // define prompts
                 var systemPrompt = "You are an AI assistant that helps people to understand images. Give your analysis in a direct style. Do not share more information that the requested by the users.";
@@ -435,30 +474,39 @@ namespace Phi3
                 //Console.WriteLine(session.OutputNames[0]);
                 //var textTensor = LoadTextAsTensor(textInput);
 
+                var pixelTensor = LoadPixelValuesAsTensor(imagePath);
+                var sizeTensor = GetImgSize(fileLocationsForImageApp.Image1_Dir, fileLocationsForImageApp.Image2_Dir);
+
+                var pixelTensorOneImage = LoadPixelValues(imagePath);
+                var sizeTensorOneImage = GetImageSize(fileLocationsForImageApp.Image1_Dir);
+
                 int height = 224;
                 int width = 224;
                 int max_num_crops = 4;
                 int num_images = 1;
                 //var imageSizes = OrtValue.CreateTensorValueFromMemory<long>(new long[] { height, width }, new long[] { num_images, 2 });
                 //var pixelValues = OrtValue.CreateTensorValueFromMemory<Float16>(new Float16[3 * max_num_crops * height * width], new long[] { num_images, max_num_crops, 3, height, width });
-                
-                var imageSizes = NamedOnnxValue.CreateFromSequence("num_images", new long[] { height, width });
-                var pixelValues = NamedOnnxValue.CreateFromSequence("pixel_values", new Float16[3 * max_num_crops * height * width]);
+
+                //var imageSizes = NamedOnnxValue.CreateFromSequence("image_sizes", new long[] { height, width });
+                //var pixelValues = NamedOnnxValue.CreateFromSequence("pixel_values", new Float16[3 * max_num_crops * height * width]);
+
+                var imageSizes = NamedOnnxValue.CreateFromTensor<long>("image_sizes", sizeTensor); // new long[] { height, width });
+                var pixelValues = NamedOnnxValue.CreateFromTensor<float>("pixel_values", pixelTensor);
 
                 var newins = new List<NamedOnnxValue>() { imageSizes, pixelValues } ;
 
-                using var results2 = session.Run(newins);
-                var output2 = results2.First().AsTensor<float>().ToArray();
-                Console.WriteLine($"Processed {imagePath}: {string.Join(", ", output2)}");
+                // test with two images
+                //using var results2 = session.Run(newins);
+                //var output2 = results2.First().AsTensor<float>().ToArray();
+                //Console.WriteLine($"Processed {imagePath}: {string.Join(", ", output2)}");
 
 
-                var pixelTensor = LoadPixelValuesAsTensor(imagePath);
-                var sizeTensor = GetImgSize(fileLocationsForImageApp.Image1_Dir, fileLocationsForImageApp.Image2_Dir);
+
 
                 var inputs = new List<NamedOnnxValue>
                 {
-                    NamedOnnxValue.CreateFromTensor<float>("pixel_values", pixelTensor)
-                    ,NamedOnnxValue.CreateFromTensor<long>("image_sizes", sizeTensor)  //imageSizes) //.ToDenseTensor()
+                    NamedOnnxValue.CreateFromTensor<float>("pixel_values", pixelTensorOneImage)
+                    ,NamedOnnxValue.CreateFromTensor<long>("image_sizes", sizeTensorOneImage)  //imageSizes) //.ToDenseTensor()
                 };
 
                 //var val = inputs[0].Value;
@@ -490,6 +538,11 @@ namespace Phi3
         // Create input: float32[num_images,max_num_crops,3,height,width]
         static DenseTensor<float> LoadImageAsTensor(string imagePath)
         {
+            using var image = new Bitmap(imagePath);
+
+            DenseTensor<float> tensorImage = new(new[] { 1, 3, image.Height, image.Width });
+
+
             using var bitmap = new Bitmap(imagePath);
 
             //BuGeRedCollection bgrcoll = new BuGeRedCollection();
@@ -501,7 +554,9 @@ namespace Phi3
             {
                 for (int x = 0; x < bitmap.Width; x++)
                 {
+
                     var color = bitmap.GetPixel(x, y);
+
                     tensor[0, 0, 0, y, x] = color.R / 255.0f;
                     tensor[0, 0, 1, y, x] = color.G / 255.0f;
                     tensor[0, 0, 2, y, x] = color.B / 255.0f;
@@ -510,6 +565,7 @@ namespace Phi3
 
             return tensor;
         }
+
         // name: pixel_values
         // tensor: float32[num_images,max_num_crops,3,height,width]
         static DenseTensor<float> LoadPixelValuesAsTensor(string imagePath)
@@ -532,11 +588,34 @@ namespace Phi3
             return tensor;
         }
 
-        static DenseTensor<float> LoadImageAsNormalTensor(string imagePath)
+        // name: pixel_values
+        // tensor: float32[num_images,max_num_crops,3,height,width]
+        static DenseTensor<float> LoadPixelValues(string imagePath)
         {
             using var bitmap = new Bitmap(imagePath);
+            var tensor = new DenseTensor<float>(new[] { 1, 3, 3, bitmap.Height, bitmap.Width });
 
-            var tensor = new DenseTensor<float>(new[] { 1, 3, bitmap.Height, bitmap.Width });
+            for (int y = 0; y < bitmap.Height; y++)
+            {
+                for (int x = 0; x < bitmap.Width; x++)
+                {
+                    var color = bitmap.GetPixel(x, y);
+                    tensor[0, 0, 0, y, x] = color.R / 255.0f;
+                    tensor[0, 0, 1, y, x] = color.G / 255.0f;
+                    tensor[0, 0, 2, y, x] = color.B / 255.0f;
+                }
+            }
+
+            return tensor;
+        }
+
+        // 3 * max_num_crops * height * width
+        static DenseTensor<float> LoadImageAsDenseTensor(string imagePath)
+        {
+            int max_num_crops = 4;
+            using var bitmap = new Bitmap(imagePath);
+
+            var tensor = new DenseTensor<float>(new[] { 1, 3, 3, bitmap.Height, bitmap.Width });
 
             for (int y = 0; y < bitmap.Height; y++)
             {
@@ -544,9 +623,9 @@ namespace Phi3
                 {
                     var color = bitmap.GetPixel(x, y);
 
-                    tensor[0, 0, y, x] = (float) color.R / 255.0f;
-                    tensor[0, 1, y, x] = (float) color.G / 255.0f;
-                    tensor[0, 2, y, x] = (float) color.B / 255.0f;
+                    tensor[0, 0, 0, y, x] = (float) color.R / 255.0f;
+                    tensor[0, 1, 1, y, x] = (float) color.G / 255.0f;
+                    tensor[0, 2, 2, y, x] = (float) color.B / 255.0f;
                 }
             }
 
@@ -618,26 +697,16 @@ namespace Phi3
 
 
         // long[,]
-        static DenseTensor<long>  GetImagesSize(string imagePath1, string imagePath2)
+        static DenseTensor<long>  GetImageSize(string imagePath1)
         {
             using var bitmap1 = new Bitmap(imagePath1);
-            using var bitmap2 = new Bitmap(imagePath2);
+            int num_images = 1;
 
-            //var tensor = new DenseTensor<long>(new[] { 1, 2 });
-            //var tensor = new DenseTensor<long>(new[] { 1, 2 });
             var imageSize = new long[,] { { 1, 1 }, { 1, 1 } };
-            var tensor = new DenseTensor<long>(new[] { 2, 2 });
-            //var xx = new long[,] { { 1, 1 }, { 1, 1 } };
-
-            imageSize[0, 0] = (long)bitmap1.Height;
-            imageSize[0, 1] = (long)bitmap1.Width;
-            imageSize[1, 0] = (long)bitmap2.Height;
-            imageSize[1, 1] = (long)bitmap2.Width;
+            var tensor = new DenseTensor<long>(new[] { num_images, 2 });
 
             tensor[0, 0] = (long)bitmap1.Height;
             tensor[0, 1] = (long)bitmap1.Width;
-            tensor[1, 0] = (long)bitmap2.Height;
-            tensor[1, 1] = (long)bitmap2.Width;
 
             return tensor;
         }
@@ -666,6 +735,94 @@ namespace Phi3
                 sum += ch;
             }
             return sum;
+        }
+
+        public static int[] TokenizeText(string text)
+        {
+            // Create Tokenizer and tokenize the sentence.
+            var tokenizerOnnxPath = Directory.GetCurrentDirectory().ToString() + ("\\text_tokenizer\\custom_op_cliptok.onnx");
+
+            // Create session options for custom op of extensions
+            using var sessionOptions = new SessionOptions();
+            var customOp = "ortextensions.dll";
+            sessionOptions.RegisterCustomOpLibraryV2(customOp, out var libraryHandle);
+
+            // Create an InferenceSession from the onnx clip tokenizer.
+            using var tokenizeSession = new InferenceSession(tokenizerOnnxPath, sessionOptions);
+
+            // Create input tensor from text
+            using var inputTensor = OrtValue.CreateTensorWithEmptyStrings(OrtAllocator.DefaultInstance, new long[] { 1 });
+            inputTensor.StringTensorSetElementAt(text.AsSpan(), 0);
+
+            var inputs = new Dictionary<string, OrtValue>
+            {
+                {  "string_input", inputTensor }
+            };
+
+            // Run session and send the input data in to get inference output. 
+            using var runOptions = new RunOptions();
+            using var tokens = tokenizeSession.Run(runOptions, inputs, tokenizeSession.OutputNames);
+
+            var inputIds = tokens[0].GetTensorDataAsSpan<long>();
+
+            // Cast inputIds to Int32
+            var InputIdsInt = new int[inputIds.Length];
+            for (int i = 0; i < inputIds.Length; i++)
+            {
+                InputIdsInt[i] = (int)inputIds[i];
+            }
+
+            Console.WriteLine(String.Join(" ", InputIdsInt));
+
+            var modelMaxLength = 77;
+            // Pad array with 49407 until length is modelMaxLength
+            if (InputIdsInt.Length < modelMaxLength)
+            {
+                var pad = Enumerable.Repeat(49407, 77 - InputIdsInt.Length).ToArray();
+                InputIdsInt = InputIdsInt.Concat(pad).ToArray();
+            }
+            return InputIdsInt;
+        }
+
+        public static float[] TextEncoder(int[] tokenizedInput)
+        {
+            // Create input tensor. OrtValue will not copy, will read from managed memory
+            using var input_ids = OrtValue.CreateTensorValueFromMemory<int>(tokenizedInput,
+                new long[] { 1, tokenizedInput.Count() });
+
+            var textEncoderOnnxPath = Directory.GetCurrentDirectory().ToString() + ("\\text_encoder\\model.onnx");
+
+            using var encodeSession = new InferenceSession(textEncoderOnnxPath);
+
+            // Pre-allocate the output so it goes to a managed buffer
+            // we know the shape
+            var lastHiddenState = new float[1 * 77 * 768];
+            using var outputOrtValue = OrtValue.CreateTensorValueFromMemory<float>(lastHiddenState, new long[] { 1, 77, 768 });
+
+            string[] input_names = { "input_ids" };
+            OrtValue[] inputs = { input_ids };
+
+            string[] output_names = { encodeSession.OutputNames[0] };
+            OrtValue[] outputs = { outputOrtValue };
+
+            // Run inference.
+            using var runOptions = new RunOptions();
+            encodeSession.Run(runOptions, input_names, inputs, output_names, outputs);
+
+            return lastHiddenState;
+        }
+
+        public static int[] CreateUncondInput()
+        {
+            // Create an array of empty tokens for the unconditional input.
+            var blankTokenValue = 49407;
+            var modelMaxLength = 77;
+            var inputIds = new List<Int32>();
+            inputIds.Add(49406);
+            var pad = Enumerable.Repeat(blankTokenValue, modelMaxLength - inputIds.Count()).ToArray();
+            inputIds.AddRange(pad);
+
+            return inputIds.ToArray();
         }
 
     }
