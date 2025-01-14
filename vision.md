@@ -1,6 +1,27 @@
 ﻿# Vision Language Model
 
 
+```c#
+
+Model: Phi-3-v-128k-instruct-vision.onnx
+Format: ONNX v7
+
+INPUTS
+
+name: pixel_values
+tensor: float32[num_images,max_num_crops,3,height,width]
+
+name: image_sizes
+tensor: int64[num_images,2]
+
+OUTPUTS
+
+name: visual_features
+tensor: float32[1,num_img_tokens,3072]
+
+```
+## Rank
+
 
 ```c#
 
@@ -57,6 +78,24 @@ the data they were trained on, how they encode images, and, thus, their capabili
 
 => Birds in the image are three Cocatoos, they are large white birds with yellow crest. 
 
+---------------------------------------------------------------
+| Rank of  | Math     | Example                               |
+| tensor   | entity   |                                       |
+---------------------------------------------------------------
+|    0     | Scalar   | x = 42                                |
+|    1     | Vector   | z = [10, 15, 20]                      |
+|    2     | Matrix   | a = [[1 0 2 3],                       |
+|          |          |      [2 1 0 4],                       |
+|          |          |      [0 2 1 1]]                       |
+|    3     | 3-Tensor | A single image of shape:              |
+|          |          | [height, width, color_channels]       |
+|          |          | ex: [1080, 1920, 3]                   |
+|    4     | 4-Tensor | A batch of images with shape:         |
+|          |          | [batch_size, height, width, channels] |
+|          |          | ex: [10, 1080, 1920, 3]               |
+|    N     | n-dim    | You get the idea...                   |
+|          | Tensor   |                                       |
+---------------------------------------------------------------
 
 
 

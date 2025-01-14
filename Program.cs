@@ -16,6 +16,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO.Pipes;
 using System.Numerics;
 using System.Xml.Linq;
+using OnnxStack.Core;
 
 
 namespace Phi3
@@ -396,13 +397,23 @@ namespace Phi3
                 };
             }
         }
+        /*
+        INPUTS
 
+        name: pixel_values
+        tensor: float32[num_images,max_num_crops,3,height,width]
+
+        name: image_sizes
+        tensor: int64[num_images,2]
+
+         */
         static private int ProcessImages()
         {
 
             //string modelPath = "path_to_your_model.onnx";
             //string[] imagePaths = { "image1.jpg", "image2.jpg" }; // Add your image paths here
-            string textInput = "Find water";
+            //string textInput = "Find water";
+
             var fileLocationsForImageApp = new FileLocations
             {
                 ModelDirectory = @"C:\tmp\models\Phi-3-vision-128k-instruct-onnx-cpu\cpu-int4-rtn-block-32-acc-level-4\phi-3-v-128k-instruct-vision.onnx", //Phi-3-vision-128k-instruct-onnx-cpu\cpu-int4-rtn-block-32-acc-level-4",
@@ -420,50 +431,44 @@ namespace Phi3
 
             foreach (var imagePath in imagePaths)
             {
-                var inputTensor = LoadImageAsTensor(imagePath);
-                var image_sizesTensor = LoadImageSizesAsTensor(fileLocationsForImageApp.Image1_Dir, fileLocationsForImageApp.Image2_Dir);
-                var textTensor = LoadTextAsTensor(textInput);
-                
-                Console.WriteLine(session.InputNames[0]);
+                //Console.WriteLine(session.InputNames[0]);
+                //Console.WriteLine(session.OutputNames[0]);
+                //var textTensor = LoadTextAsTensor(textInput);
 
-                var imageSizes = new DenseTensor<long>(new[] { 2, 2 });
-                var sizes = GetImageSize(fileLocationsForImageApp.Image1_Dir, fileLocationsForImageApp.Image2_Dir);
-                imageSizes[0, 0] = sizes[0, 0];
-                imageSizes[0, 1] = sizes[0, 1];
-                imageSizes[1, 0] = sizes[1, 0];
-                imageSizes[1, 1] = sizes[1, 1];
+                int height = 224;
+                int width = 224;
+                int max_num_crops = 4;
+                int num_images = 1;
+                //var imageSizes = OrtValue.CreateTensorValueFromMemory<long>(new long[] { height, width }, new long[] { num_images, 2 });
+                //var pixelValues = OrtValue.CreateTensorValueFromMemory<Float16>(new Float16[3 * max_num_crops * height * width], new long[] { num_images, max_num_crops, 3, height, width });
+                
+                var imageSizes = NamedOnnxValue.CreateFromSequence("num_images", new long[] { height, width });
+                var pixelValues = NamedOnnxValue.CreateFromSequence("pixel_values", new Float16[3 * max_num_crops * height * width]);
+
+                var newins = new List<NamedOnnxValue>() { imageSizes, pixelValues } ;
+
+                using var results2 = session.Run(newins);
+                var output2 = results2.First().AsTensor<float>().ToArray();
+                Console.WriteLine($"Processed {imagePath}: {string.Join(", ", output2)}");
+
+
+                var pixelTensor = LoadPixelValuesAsTensor(imagePath);
+                var sizeTensor = GetImgSize(fileLocationsForImageApp.Image1_Dir, fileLocationsForImageApp.Image2_Dir);
 
                 var inputs = new List<NamedOnnxValue>
                 {
-                    NamedOnnxValue.CreateFromTensor("pixel_values", inputTensor.ToDenseTensor())
-                    ,NamedOnnxValue.CreateFromTensor("image_sizes", textTensor.ToDenseTensor())  //imageSizes) //
-                     
+                    NamedOnnxValue.CreateFromTensor<float>("pixel_values", pixelTensor)
+                    ,NamedOnnxValue.CreateFromTensor<long>("image_sizes", sizeTensor)  //imageSizes) //.ToDenseTensor()
                 };
-                //long[,] arr = { { 100, 200 }, { 200, 300 } };
 
-
-                var val = inputs[0].Value;
-                var inputNames = session.InputMetadata.Values;
-
-
-
-                //imageSizes[0] = new Tuple<long, long>(200, 200);
-                //imageSizes[1] = new Tuple<long, long>(300, 300);
-
-                //var imageSizes = OrtValue.CreateTensorValueFromMemory<long>(new long[] { 100, 200, 300, 400 }, new long[] { 2, 2 });
-                //var imageSizes = (new long[] { 100, 200, 300, 400 }, new long[] { 2, 2 });
-                //var imageSizes = new long[] { 100, 200, 300, 400 };
-
-
-                //var imageTensor = new DenseTensor<long>(new[] { 100, 200, 300, 400 });
+                //var val = inputs[0].Value;
+                //var inputNames = session.InputMetadata.Values;
 
                 //var tensor = new DenseTensor<float>(inputTensor);
-                var nov1 = NamedOnnxValue.CreateFromTensor<float>("pixel_values", inputTensor.ToDenseTensor());
-                var mno2 = NamedOnnxValue.CreateFromTensor<long>("image_sizes", imageSizes);
-                // Tuple<long, long>
+                var nov1 = NamedOnnxValue.CreateFromTensor<float>("pixel_values", pixelTensor);
+                var mno2 = NamedOnnxValue.CreateFromTensor<long>("image_sizes", sizeTensor);
 
-
-                var newins = new List<NamedOnnxValue> {nov1, mno2 };
+                //var newins = new List<NamedOnnxValue>( { nov1, mno2 } );
 
                 using var results = session.Run(inputs);
                 var output = results.First().AsTensor<float>().ToArray();
@@ -482,6 +487,7 @@ namespace Phi3
             }
         }
 
+        // Create input: float32[num_images,max_num_crops,3,height,width]
         static DenseTensor<float> LoadImageAsTensor(string imagePath)
         {
             using var bitmap = new Bitmap(imagePath);
@@ -489,16 +495,37 @@ namespace Phi3
             //BuGeRedCollection bgrcoll = new BuGeRedCollection();
             //var v3 = bgrcoll.GetBitmapAsVector3(bitmap);
 
-            var tensor = new DenseTensor<float>(new[] { 1, 3, bitmap.Height, bitmap.Width });
+            var tensor = new DenseTensor<float>(new[] { 1, 3, 3, bitmap.Height, bitmap.Width });
 
             for (int y = 0; y < bitmap.Height; y++)
             {
                 for (int x = 0; x < bitmap.Width; x++)
                 {
                     var color = bitmap.GetPixel(x, y);
-                    tensor[0, 0, y, x] = color.R / 255.0f;
-                    tensor[0, 1, y, x] = color.G / 255.0f;
-                    tensor[0, 2, y, x] = color.B / 255.0f;
+                    tensor[0, 0, 0, y, x] = color.R / 255.0f;
+                    tensor[0, 0, 1, y, x] = color.G / 255.0f;
+                    tensor[0, 0, 2, y, x] = color.B / 255.0f;
+                }
+            }
+
+            return tensor;
+        }
+        // name: pixel_values
+        // tensor: float32[num_images,max_num_crops,3,height,width]
+        static DenseTensor<float> LoadPixelValuesAsTensor(string imagePath)
+        {
+            using var bitmap = new Bitmap(imagePath);
+            var tensor = new DenseTensor<float>(new[] { 1, 3, 3, bitmap.Height, bitmap.Width });
+            int num_images = 2;
+
+            for (int y = 0; y < bitmap.Height; y++)
+            {
+                for (int x = 0; x < bitmap.Width; x++)
+                {
+                    var color = bitmap.GetPixel(x, y);
+                    tensor[0, 0, 0, y, x] = color.R / 255.0f;
+                    tensor[0, 0, 1, y, x] = color.G / 255.0f;
+                    tensor[0, 0, 2, y, x] = color.B / 255.0f;
                 }
             }
 
@@ -560,39 +587,59 @@ namespace Phi3
             return tensor;
         }
 
-        static DenseTensor<Tuple<long, long>> LoadImageSizesAsTensor(string imagePath1, string imagePath2)
+        
+        // name: image_sizes
+        // tensor: int64[num_images,2]
+        static DenseTensor<long> GetImgSize(string imagePath1, string imagePath2)
         {
             using var bitmap1 = new Bitmap(imagePath1);
             using var bitmap2 = new Bitmap(imagePath2);
-            //var tensor = new DenseTensor<Int64>(new[] { 1, 2 });
-            var tensor = new DenseTensor<Tuple<long, long>>(new[] { 1, 2 });
+            int num_images = 2;
 
-            Tuple<long, long> b1 = new Tuple<long, long>( bitmap1.Height, bitmap1.Width);
-            Tuple<long, long> b2 = new Tuple<long, long>(bitmap2.Height, bitmap2.Width);
-            List<Tuple<long, long>> l = new List<Tuple<long, long>> { b1, b2 };
+            //var tensor = new DenseTensor<long>(new[] { 1, 2 });
+            //var tensor = new DenseTensor<long>(new[] { 1, 2 });
+            var imageSize = new long[,] { { 1, 1 }, { 1, 1 } };
+            //var tensor = new DenseTensor<long>(new[] { 2, 20 });
+            var tensor = new DenseTensor<long>(new[] { num_images, 2 });
+            //var xx = new long[,] { { 1, 1 }, { 1, 1 } };
 
-            for (int i = 0; i < 2; i++)
-            {
-                tensor[0, i] = l[i];
-            }
+            imageSize[0, 0] = (long)bitmap1.Height;
+            imageSize[0, 1] = (long)bitmap1.Width;
+            imageSize[1, 0] = (long)bitmap2.Height;
+            imageSize[1, 1] = (long)bitmap2.Width;
+
+            tensor[0, 0] = (long)bitmap1.Height;
+            tensor[0, 1] = (long)bitmap1.Width;
+            tensor[1, 0] = (long)bitmap2.Height;
+            tensor[1, 1] = (long)bitmap2.Width;
 
             return tensor;
         }
 
-        static long[,] GetImageSize(string imagePath1, string imagePath2)
+
+        // long[,]
+        static DenseTensor<long>  GetImagesSize(string imagePath1, string imagePath2)
         {
             using var bitmap1 = new Bitmap(imagePath1);
             using var bitmap2 = new Bitmap(imagePath2);
 
+            //var tensor = new DenseTensor<long>(new[] { 1, 2 });
+            //var tensor = new DenseTensor<long>(new[] { 1, 2 });
             var imageSize = new long[,] { { 1, 1 }, { 1, 1 } };
+            var tensor = new DenseTensor<long>(new[] { 2, 2 });
+            //var xx = new long[,] { { 1, 1 }, { 1, 1 } };
 
-            imageSize[0, 0] = bitmap1.Height;
-            imageSize[0, 1] = bitmap1.Width;
-            imageSize[0, 0] = bitmap2.Height;
-            imageSize[0, 1] = bitmap2.Width;
+            imageSize[0, 0] = (long)bitmap1.Height;
+            imageSize[0, 1] = (long)bitmap1.Width;
+            imageSize[1, 0] = (long)bitmap2.Height;
+            imageSize[1, 1] = (long)bitmap2.Width;
 
+            tensor[0, 0] = (long)bitmap1.Height;
+            tensor[0, 1] = (long)bitmap1.Width;
+            tensor[1, 0] = (long)bitmap2.Height;
+            tensor[1, 1] = (long)bitmap2.Width;
 
-            return imageSize;
+            return tensor;
         }
 
 
