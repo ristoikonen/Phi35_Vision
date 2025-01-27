@@ -60,6 +60,19 @@ namespace Phi3
             AnsiConsole.Clear();
         }
 
+        public static void StartRecording()
+        {
+            AnsiConsole.Record();
+        }
+
+        public static string GetRecording()
+        {
+            return AnsiConsole.ExportText();
+        }
+
+
+        
+
         public static void DisplayTitleH2(string subtitle)
         {
             AnsiConsole.MarkupLine($"[bold][blue]=== {subtitle} ===[/][/]");

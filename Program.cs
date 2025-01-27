@@ -31,6 +31,7 @@ namespace Phi3
         // future CMD will have path and type params: phi3 "C:\tmp\models\phi-3-directml-int4-awq-block-128" chat
 
         public const string DEFAULT_MODEL_PATH = @"C:\tmp\models\phi-3-directml-int4-awq-block-128";
+        private const string DESC_DIR = "Descriptions";
 
         static async Task<int> Main(string[] args)
         {
@@ -53,7 +54,9 @@ namespace Phi3
             switch (scenario)
             {
                 case "cd.jpg":
-                    await RunImage(fileLocationsForImageApp, fileLocationsForImageApp.Image1_Dir);
+
+                    //await RunImage(fileLocationsForImageApp, fileLocationsForImageApp.Image1_Dir);
+                    await RunApp(@"C:\tmp\models\", "image");
                     break;
                 case "BayRoad.png":
                     await RunImage(fileLocationsForImageApp, fileLocationsForImageApp.Image2_Dir);
@@ -101,13 +104,19 @@ namespace Phi3
             }
             var height = 512;
             var width = 512;
+
+            
+
             // Inference Stable Diff
+            //UnaryNegationOperators UNet = new UnaryNegationOperators();
+            /*
             var image = UNet.Inference(num_inference_steps, textEmbeddings, guidance_scale, batch_size, height, width);
             // If image failed or was unsafe it will return null.
             if (image == null)
             {
                 Console.WriteLine("Unable to create image, please try again.");
             }
+            */
             return 0;
         }
 
@@ -172,6 +181,7 @@ namespace Phi3
                     var outputTokens = generator.GetSequence(0);
                     var newToken = outputTokens.Slice(outputTokens.Length - 1, 1);
                     var output = tokenizer.Decode(newToken);
+
                     Console.Write(output);
                 }
                 Console.WriteLine();
@@ -185,7 +195,7 @@ namespace Phi3
             SpectreConsoleOutput.DisplayWait();
             
             var modelPath = fileLocationsForImageApp.ModelDirectory; // @"C:\tmp\models\phi-3-directml-int4-awq-block-128";
-            var img = Images.Load(new string[] { pathToImage });
+            var img = Images.Load(pathToImage); //  new string[] { pathToImage });
 
             // chat start
             SpectreConsoleOutput.ClearDisplay();
@@ -221,7 +231,17 @@ namespace Phi3
                 generator.ComputeLogits();
                 generator.GenerateNextToken();
                 var seq = generator.GetSequence(0)[^1];
-                Console.Write(tokenizerStream.Decode(seq));
+                var output = tokenizerStream.Decode(seq);
+                Console.Write(output);  //  tokenizerStream.Decode(seq));
+
+                SaveDesc(pathToImage, output);
+                //var directoryName = Path.GetDirectoryName(pathToImage);
+                //var descdir = directoryName + @"\" + DESC_DIR;
+                //var descfile = Path.Combine(descdir, Path.GetFileNameWithoutExtension(pathToImage)) + @".txt";
+                //var descpath = Path.Combine(descdir, descfile);
+
+                //File.WriteAllText(descpath, output);
+
             }
 
             Console.WriteLine("");
@@ -230,9 +250,22 @@ namespace Phi3
         }
 
 
+        static async void SaveDesc(string pathToImage, string output)
+        {
+            var directoryName = Path.GetDirectoryName(pathToImage);
+            var descdir = directoryName + @"\" + DESC_DIR;
+            var descfile = Path.Combine(descdir, Path.GetFileNameWithoutExtension(pathToImage)) + @".txt";
+            var descpath = Path.Combine(descdir, descfile);
+
+            File.WriteAllText(descpath, output);
+
+        }
+
         static async Task<int> RunApp(string path, string? usage)
         {
             var APP_MODELUSE = Phi3.MODELUSE.IMAGE;
+            string output = string.Empty;
+
             if (usage is not null && usage.ToLower().StartsWith("image") || usage is not null && usage.ToLower().StartsWith("img"))
                 APP_MODELUSE = MODELUSE.IMAGE;
 
@@ -303,7 +336,7 @@ namespace Phi3
                         //        var e    = generator.SetActiveAdapter(GetOutput("e");
                         var outputTokens = generator.GetSequence(0);
                         var newToken = outputTokens.Slice(outputTokens.Length - 1, 1);
-                        var output = tokenizer.Decode(newToken);
+                        output = tokenizer.Decode(newToken);
                         Console.Write(output);
                     }
                     Console.WriteLine();
@@ -313,7 +346,7 @@ namespace Phi3
             if (APP_MODELUSE == MODELUSE.IMAGE)
             {
 
-                
+                // analyse Image1
 
                 // path for model and images
                 var modelPath = fileLocationsForImageApp.ModelDirectory;
@@ -323,13 +356,13 @@ namespace Phi3
                 var petsMusicImagePath = fileLocationsForImageApp.Image2_Dir; // Path.Combine(Directory.GetCurrentDirectory(), "imgs", "petsmusic.png");
                 var onepath = new string[] { foggyDayImagePath };
                 var bothpaths = new string[] { foggyDayImagePath, petsMusicImagePath };
-                var img = Images.Load(new string[] { foggyDayImagePath });
+                var img = Images.Load(foggyDayImagePath); //  new string[] { foggyDayImagePath });
 
                 // define prompts
                 var systemPrompt = "You are an AI assistant that helps people to understand images. Give your analysis in a direct style. Do not share more information that the requested by the users.";
                 string userPrompt = "Describe the image, and return the string 'STOP' at the end.";
                 
-                var question = "What is person doing in the image?";
+                //var question = "What is person doing in the image?";
                 var fullPrompt = $"<|system|>{systemPrompt}<|end|><|user|><|image_1|>{userPrompt}<|end|><|assistant|>";
 
                 // load model and create processor
@@ -342,50 +375,50 @@ namespace Phi3
                 //------
 
 
-            //    StringBuilder phiResponse = new StringBuilder();
+                //    StringBuilder phiResponse = new StringBuilder();
 
 
-            //    var img1 = Images.Load(onepath);
-            //    string userPrompt1 = "Describe the image, and return the string 'STOP' at the end.";
-            //    var fullPrompt1 = $"<|system|>{systemPrompt}<|end|><|user|><|image_1|>{userPrompt1}<|end|><|assistant|>";
+                //    var img1 = Images.Load(onepath);
+                //    string userPrompt1 = "Describe the image, and return the string 'STOP' at the end.";
+                //    var fullPrompt1 = $"<|system|>{systemPrompt}<|end|><|user|><|image_1|>{userPrompt1}<|end|><|assistant|>";
 
-            //    // create the input tensor with the prompt and image
-            //    //"visual_features": "visual_features"
-
-
-            //    var inputTensors1 = processor.ProcessImages(fullPrompt1, img1);
-            //    using GeneratorParams generatorParams1 = new GeneratorParams(model);
-            //    generatorParams1.SetSearchOption("max_length", 3072);
-            //    generatorParams1.SetInputs(inputTensors1);
-
-            //    var isProcessingTokenStarted = false;
-
-            //    // generate response        
-            //    using var generator1 = new Generator(model, generatorParams1);
-            //    while (!generator1.IsDone())
-            //    {
-            //        generator1.ComputeLogits();
-            //        generator1.GenerateNextToken();
-
-            //        if (!isProcessingTokenStarted)
-            //        {
-
-            //            isProcessingTokenStarted = true;
-            //        }
-
-            //        var seq = generator1.GetSequence(0)[^1];
-            //        var tokenString = tokenizerStream.Decode(seq);
-            //        phiResponse.Append(tokenString);
-            //    }
+                //    // create the input tensor with the prompt and image
+                //    //"visual_features": "visual_features"
 
 
-            //Console.WriteLine(phiResponse.ToString());
+                //    var inputTensors1 = processor.ProcessImages(fullPrompt1, img1);
+                //    using GeneratorParams generatorParams1 = new GeneratorParams(model);
+                //    generatorParams1.SetSearchOption("max_length", 3072);
+                //    generatorParams1.SetInputs(inputTensors1);
 
-            //---
+                //    var isProcessingTokenStarted = false;
+
+                //    // generate response        
+                //    using var generator1 = new Generator(model, generatorParams1);
+                //    while (!generator1.IsDone())
+                //    {
+                //        generator1.ComputeLogits();
+                //        generator1.GenerateNextToken();
+
+                //        if (!isProcessingTokenStarted)
+                //        {
+
+                //            isProcessingTokenStarted = true;
+                //        }
+
+                //        var seq = generator1.GetSequence(0)[^1];
+                //        var tokenString = tokenizerStream.Decode(seq);
+                //        phiResponse.Append(tokenString);
+                //    }
 
 
-            // create the input tensor with the prompt and image
-            Console.WriteLine("Full Prompt: " + fullPrompt);
+                //Console.WriteLine(phiResponse.ToString());
+
+                //---
+
+
+                // create the input tensor with the prompt and image
+                Console.WriteLine("Full Prompt: " + fullPrompt);
                 Console.WriteLine("Start processing image and prompt ...");
                 var inputTensors = processor.ProcessImages(fullPrompt, img);
                 using GeneratorParams generatorParams = new GeneratorParams(model);
@@ -395,13 +428,28 @@ namespace Phi3
                 // generate response
                 Console.WriteLine("Generating response ...");
                 using var generator = new Generator(model, generatorParams);
+                string saveoutput = string.Empty;
+                
+                SpectreConsoleOutput.StartRecording();
+
                 while (!generator.IsDone())
                 {
                     generator.ComputeLogits();
                     generator.GenerateNextToken();
                     var seq = generator.GetSequence(0)[^1];
-                    Console.Write(tokenizerStream.Decode(seq));
+                    output = tokenizerStream.Decode(seq);
+                    Console.Write(output);
+                    saveoutput += output;
+                    
+
                 }
+
+                // serachvalues
+                //SaveDesc(foggyDayImagePath, SpectreConsoleOutput.GetRecording());
+                SaveDesc(foggyDayImagePath, saveoutput);
+                Console.WriteLine(saveoutput);
+                Console.WriteLine(SpectreConsoleOutput.GetRecording());
+                //SaveDesc(foggyDayImagePath, saveoutput);
 
                 Console.WriteLine("");
                 Console.WriteLine("Done!");
